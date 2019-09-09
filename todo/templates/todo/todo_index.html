@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+
+{% block title %}Vue.js - Django todo app{% endblock %}
+
+{% block extra-style %}
+<style>
+    body {
+        text-align: center;
+        background-color: #ddd;
+    }
+
+    .inputBox {
+        margin: auto;
+        width: 70%;
+        background: white;
+        height: 50px;
+        border-radius: 50px;
+        line-height: 50px;
+    }
+
+    .inputBox .name {
+        border-style: none;
+        border-bottom: 1px solid #ddd;
+        width: 90px;
+        padding-left: 20px;
+        line-height: 20px;
+    }
+
+    .inputBox .item {
+        border-style: none;
+        border-bottom: 1px solid #ddd;
+        width: 400px;
+        margin-left: 50px;
+        padding-left: 20px;
+        line-height: 20px;
+    }
+
+    .todoList {
+        list-style: none;
+        padding: 10px 0;
+        text-align: left;
+    }
+
+    .todoList li {
+        display: flex;
+        height: 50px;
+        line-height: 50px;
+        margin: 0.5rem 0;
+        padding: 0 0.9rem;
+        background: white;
+        border-radius: 5px;
+    }
+
+    .removeBtn {
+        margin-left: auto;
+        font-size: 20px;
+    }
+
+    .removeBtn:hover {
+        color: red;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id='app'>
+
+    <h1>My Todo App !</h1>
+    <strong>서로 할 일이나 의견을 공유해 봅시다.</strong>
+    <br>
+
+    <div class="inputBox">
+        <input class="name" type="text" placeholder="name ..."
+               v-model.trim="name"><!--Vue.js 에서는 input으로 받는 데이터를 바인딩하기 위해서 v-model 디렉티브를 사용한다.-->
+        <input class="item" type="text" placeholder="type anything welcomed ..."
+               v-model.trim="todo" v-on:keyup.enter="add_todo()"> <!-- v-model.trim 수식어를 넣어주면 양 쪽으로 생긴 공백을 제거해준다.-->
+        <!--v-on:keyup.enter="add_todo()" 는 enter 키를 눌러도 onclick 이벤트가 작동한다.-->
+        <button class="btn btn-primary btn-sm"
+                v-on:click="add_todo()">ADD
+        </button>
+        <!--ADD 버튼을 클릭했을 때 클릭 이벤트를 수신하기 위해서 v-on 디렉티브를 사용한다. 이벤트 핸들러는 add_todo()-->
+    </div>
+    <ul class="todoList">
+        <li v-for="(todo, index) in todoList">
+            <!--v-for 디렉티브를 사용하여 여러개의 todo 항목을 보여준다. vue.js에서는 index는 todo 뒤에 위치해야한다.-->
+            <span>[[todo.name]]:: [[todo.todo]]</span>
+            <!--for문을 돌면서 todo.name과 todo.todo를 가져와서 출력-->
+            <span class="removeBtn"
+                  v-on:click="remove_todo(todo, index)">x</span> <!-- index는 for loop에서 가져온다. -->
+        </li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block extra-script %}
+<script src="https://unpkg.com/vue/dist/vue.min.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script>
+    axios.defaults.xsrfCookieName = 'csrftoken';
+    axios.defaults.xsrfHeaderName = 'X-CSRFToken';
+    var vm = new Vue({
+        delimiters: ['[[', ']]'], // 이런식으로 변경할 수가 있다
+        el: '#app',
+        data: {
+            name: '',
+            todo: '',
+            todoList:[]
+        },
+        created: function() {
+            console.log("created()...");
+            this.fetch_all_todo(); // 메소드 호출
+        },
+        methods: {
+            fetch_all_todo: function () {
+                console.log("fetch_all_todo()...");
+
+                var vm = this;
+                axios.get('/api/todo/list/')
+                    .then(function (res) { // 서버로 받은 데이터 res
+                        console.log("GET RES", res);
+                        vm.todoList = res.data; // this는 위치에 따라서 그 의미가 달라진다.
+                    }) // 성공 시 callback 함수
+                    .catch(function (err) {
+                        console.log("GET ERR", err)
+                    }) // 실패 시 callback 함수
+            },
+            add_todo: function () {
+                console.log("add_todo()...");
+                if (this.todo == '') return; // 만일 todo 항목을 입력을 안하면 아무일도 하지 않도록 return 시킨다.
+                if (this.name == '') this.name = '홍길동'; // 사용자가 이름을 입력하지 않으면 this.name 에 홍길동을 넣는다.
+
+                var vm = this;
+                var postData = {name: this.name, todo: this.todo}; // post로 보내는 데이터의 key 명칭이 테이블 컬럼과 같아야한다.
+                axios.post('/api/todo/create/', postData)
+                    .then(function (res){
+                        console.log("POST RES", res);
+                        vm.todoList.push({id: res.data.id, name: res.data.name, todo: res.data.todo});
+                // 사용자가 입력한 name과 todo를 v-model기능에 의해서 name과 todo 변수에 바인딩이 되고 name과 todo 변수값을
+                // todoList 배열의 맨 뒤에 넣고 있는 것이다.
+                    })
+                    .catch(function (err){
+                        console.log("POST ERR", err);
+                    })
+                this.name = this.todo = ''; // 사용자가 입력한 내용을 지워주는 기능 name과 todo를 비워준다.
+            },
+            remove_todo: function (todo ,index) { // <span class="removeBtn" v-on:click="remove_todo(todo, index)">x</span> <!-- index는 for loop에서 가져온다. -->
+                console.log("remove_todo()...", index);
+                if (confirm("Really delete ?") == false) return; // confirm 기능
+
+                var vm = this;
+                axios.delete('/api/todo/' + todo.id + '/delete/') // 99는 pk키
+                    .then(function (res){ // 삭제 성공
+                        console.log("DELETE RED", res);
+                        vm.todoList.splice(index, 1);
+                    })
+                    .catch(function (err){ // 삭제 실패
+                        console.log("DELETE ERR", err);
+                    })
+            },
+        },
+    })
+</script>
+{% endblock %}
